@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Artist Distribution Service</title>
+
+<!-- Icons -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+
+<style>
+
+*{box-sizing:border-box}
+
+body{
+ margin:0;
+ font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto;
+ background:#0b0e1f;
+ color:white;
+}
+
+/* HEADER */
+header{
+ position:sticky;
+ top:0;
+ background:#121633;
+ padding:12px;
+ display:flex;
+ justify-content:space-between;
+ align-items:center;
+ box-shadow:0 2px 8px rgba(0,0,0,.4);
+ z-index:10;
+}
+
+.logo{
+ font-weight:bold;
+ font-size:16px;
+}
+
+/* PAGES */
+.page{
+ display:none;
+ padding:14px;
+ padding-bottom:80px;
+}
+
+.page.active{display:block}
+
+/* CARDS */
+.card{
+ background:#181d44;
+ border-radius:14px;
+ padding:14px;
+ margin-bottom:12px;
+ box-shadow:0 6px 18px rgba(0,0,0,.3);
+}
+
+input,select{
+ width:100%;
+ padding:12px;
+ margin:6px 0;
+ border:none;
+ border-radius:10px;
+ background:#232865;
+ color:white;
+}
+
+button{
+ background:#4c7cff;
+ border:none;
+ padding:10px 14px;
+ border-radius:10px;
+ color:white;
+ font-weight:bold;
+ cursor:pointer;
+}
+
+button.secondary{
+ background:#2c315f;
+}
+
+/* COVER */
+.cover{
+ width:100%;
+ border-radius:12px;
+ margin-top:8px;
+}
+
+/* BOTTOM NAV */
+.nav{
+ position:fixed;
+ bottom:0;
+ width:100%;
+ display:flex;
+ background:#121633;
+ border-top:1px solid #222;
+}
+
+.nav button{
+ flex:1;
+ background:none;
+ padding:10px;
+ font-size:12px;
+}
+
+.nav i{
+ display:block;
+ font-size:18px;
+ margin-bottom:4px;
+}
+
+/* PLATFORM */
+.platform{
+ background:#20266a;
+ padding:12px;
+ border-radius:12px;
+ margin-bottom:10px;
+}
+
+/* LOGIN */
+.loginBtn{
+ background:#ffffff;
+ color:#000;
+}
+
+audio{
+ width:100%;
+ margin-top:8px;
+}
+
+</style>
+</head>
+
+<body>
+
+<header>
+<div class="logo">🎧 Artist Distribution</div>
+<div id="userArea"></div>
+</header>
+
+<!-- UPLOAD PAGE -->
+<div id="upload" class="page active">
+
+<div class="card">
+<h3><i class="fa-solid fa-upload"></i> Upload Music</h3>
+
+<input id="title" placeholder="Song Title">
+<input id="artist" placeholder="Artist Name">
+<input id="album" placeholder="Album">
+<input id="genre" placeholder="Genre">
+
+<select id="visibility">
+<option value="private">🔒 Private</option>
+<option value="public">🌍 Public</option>
+</select>
+
+<label><i class="fa-solid fa-image"></i> Cover Art</label>
+<input type="file" id="cover" accept="image/*">
+
+<label><i class="fa-solid fa-music"></i> Audio File</label>
+<input type="file" id="audio" accept="audio/*">
+
+<button onclick="uploadSong()">
+<i class="fa-solid fa-cloud-arrow-up"></i> Upload
+</button>
+
+</div>
+
+<div id="uploads"></div>
+
+</div>
+
+<!-- CONNECTIONS -->
+<div id="connections" class="page">
+<div class="card">
+<h3><i class="fa-solid fa-link"></i> Streaming Connections</h3>
+<div id="platforms"></div>
+</div>
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="nav">
+<button onclick="openTab('upload')">
+<i class="fa-solid fa-upload"></i>Upload
+</button>
+
+<button onclick="openTab('connections')">
+<i class="fa-solid fa-headphones"></i>Listen
+</button>
+</div>
+
+<script>
+
+/* =====================
+ IndexedDB
+===================== */
+
+let db;
+const req=indexedDB.open("ArtistDistributionDB",1);
+
+req.onupgradeneeded=e=>{
+ db=e.target.result;
+ db.createObjectStore("songs",{keyPath:"id",autoIncrement:true});
+ db.createObjectStore("accounts",{keyPath:"email"});
+};
+
+req.onsuccess=e=>{
+ db=e.target.result;
+ renderUser();
+ loadSongs();
+ renderPlatforms();
+};
+
+/* =====================
+ Tabs
+===================== */
+function openTab(id){
+ document.querySelectorAll(".page")
+ .forEach(p=>p.classList.remove("active"));
+
+ document.getElementById(id).classList.add("active");
+}
+
+/* =====================
+ Mock Google Login
+===================== */
+
+let currentUser=null;
+
+function renderUser(){
+ const area=document.getElementById("userArea");
+
+ if(currentUser){
+   area.innerHTML=
+   `<i class="fa-solid fa-user"></i>
+    ${currentUser}
+    <button onclick="logout()">Logout</button>`;
+ }else{
+   area.innerHTML=
+   `<button class="loginBtn" onclick="login()">
+    <i class="fa-brands fa-google"></i> Login
+    </button>`;
+ }
+}
+
+function login(){
+ let email=prompt("Mock Google Login\nEnter or create account:");
+ if(!email) return;
+
+ currentUser=email;
+ db.transaction("accounts","readwrite")
+   .objectStore("accounts")
+   .put({email});
+
+ renderUser();
+}
+
+function logout(){
+ currentUser=null;
+ renderUser();
+}
+
+/* =====================
+ Upload Song
+===================== */
+
+function uploadSong(){
+
+ if(!currentUser){
+  alert("Login first");
+  return;
+ }
+
+ const cover=document.getElementById("cover").files[0];
+ const audio=document.getElementById("audio").files[0];
+
+ if(!audio) return alert("Select audio");
+
+ const r1=new FileReader();
+ const r2=new FileReader();
+
+ r1.onload=()=>{
+   r2.onload=()=>{
+
+     const song={
+       title:title.value,
+       artist:artist.value,
+       album:album.value,
+       genre:genre.value,
+       visibility:visibility.value,
+       cover:r1.result,
+       audio:r2.result,
+       user:currentUser
+     };
+
+     db.transaction("songs","readwrite")
+       .objectStore("songs")
+       .add(song)
+       .oncomplete=loadSongs;
+   };
+
+   r2.readAsDataURL(audio);
+ };
+
+ if(cover) r1.readAsDataURL(cover);
+ else r1.onload();
+}
+
+/* =====================
+ Load Songs
+===================== */
+
+function loadSongs(){
+
+ const box=document.getElementById("uploads");
+ box.innerHTML="";
+
+ db.transaction("songs")
+ .objectStore("songs")
+ .openCursor()
+ .onsuccess=e=>{
+   let c=e.target.result;
+   if(c){
+
+     const s=c.value;
+
+     box.innerHTML+=`
+     <div class="card">
+       <b>${s.title}</b><br>
+       ${s.artist}
+       ${s.cover?`<img class="cover" src="${s.cover}">`:''}
+       <audio controls src="${s.audio}"></audio>
+       <small>${s.visibility.toUpperCase()}</small>
+     </div>`;
+
+     c.continue();
+   }
+ };
+}
+
+/* =====================
+ Platforms (100+)
+===================== */
+
+const platforms=[
+"Spotify","Apple Music","YouTube Music",
+"Amazon Music","Tidal","SoundCloud"
+];
+
+for(let i=1;i<=100;i++){
+ platforms.push("Streaming App "+i);
+}
+
+function renderPlatforms(){
+
+ const div=document.getElementById("platforms");
+ div.innerHTML="";
+
+ platforms.forEach(name=>{
+
+   const id=name.replace(/\s/g,'');
+
+   div.innerHTML+=`
+   <div class="platform">
+     <i class="fa-solid fa-play"></i>
+     <b>${name}</b>
+     <button onclick="preview('${id}')">
+     Preview
+     </button>
+     <div id="${id}"></div>
+   </div>`;
+ });
+}
+
+/* =====================
+ Preview Player
+===================== */
+
+function preview(id){
+
+ db.transaction("songs")
+ .objectStore("songs")
+ .openCursor()
+ .onsuccess=e=>{
+   let c=e.target.result;
+   if(c){
+     document.getElementById(id).innerHTML=
+     `<audio controls src="${c.value.audio}"></audio>`;
+   }
+ };
+}
+
+</script>
+</body>
+</html>
